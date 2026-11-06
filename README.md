@@ -21,7 +21,7 @@
 
 ## 安装
 
-1. 在 Releases 页面下载最新版 `MIMO桌宠-v3.1.2.apk`
+1. 在 Releases 页面下载最新版 `mimo-pet-v3.1.2.apk`
 2. 允许系统「安装未知来源应用」后点击安装
 3. 打开 App → 首次使用开启**悬浮窗权限** → 点「启动桌宠」
 
@@ -169,80 +169,27 @@ apksigner sign --ks your.keystore --out mimo-pet.apk aligned.apk
 | v1.1.0 | 2026-11-05 | 双形象切换、三档尺寸、安静/穿透/走动模式、设置页、修复气泡遮挡、更换图标 |
 | v1.0.0 | 2026-11-05 | 首个版本：单形象悬浮桌宠、眨眼浮动、拖动与点击互动 |
 
-## 历史版本归档
+## 已发布里程碑
 
-开源发布时，建议在 Releases 中保留以下全部历史版本，便于回溯与降级：
+以下里程碑版本已发布到 Releases，Tag 与版本号一致，APK 作为附件上传；中间调试与被否决的版本不公开发布，仅本地留存。
 
 | 版本 | 安装包文件名 |
 | --- | --- |
-| v2.4.3 | `MIMO桌宠-v2.4.3.apk` |
-| v2.4.2 | `MIMO桌宠-v2.4.2.apk` |
-| v3.1.2 | `MIMO桌宠-v3.1.2.apk` |
-| v3.1.1 | `MIMO桌宠-v3.1.1.apk` |
-| v3.1.0 | `MIMO桌宠-v3.1.0.apk` |
-| v3.0.7 | `MIMO桌宠-v3.0.7.apk` |
-| v3.0.6 | `MIMO桌宠-v3.0.6.apk` |
-| v3.0.5 | `MIMO桌宠-v3.0.5.apk` |
-| v3.0.4 | `MIMO桌宠-v3.0.4.apk` |
-| v3.0.3 | `MIMO桌宠-v3.0.3.apk` |
-| v3.0.2 | `MIMO桌宠-v3.0.2.apk` |
-| v3.0.1 | `MIMO桌宠-v3.0.1.apk` |
-| v3.0.0 | `MIMO桌宠-v3.0.0.apk` |
-| v2.8.7 | `MIMO桌宠-v2.8.7.apk` |
-| v2.8.6 | `MIMO桌宠-v2.8.6.apk` |
-| v2.8.5 | `MIMO桌宠-v2.8.5.apk` |
-| v2.8.4 | `MIMO桌宠-v2.8.4.apk` |
-| v2.8.3 | `MIMO桌宠-v2.8.3.apk` |
-| v2.8.2 | `MIMO桌宠-v2.8.2.apk` |
-| v2.8.1 | `MIMO桌宠-v2.8.1.apk` |
-| v2.8.0 | `MIMO桌宠-v2.8.0.apk` |
-| v2.7.9 | `MIMO桌宠-v2.7.9.apk` |
-| v2.7.8 | `MIMO桌宠-v2.7.8.apk` |
-| v2.7.7 | `MIMO桌宠-v2.7.7.apk` |
-| v2.7.6 | `MIMO桌宠-v2.7.6.apk` |
-| v2.7.5 | `MIMO桌宠-v2.7.5.apk` |
-| v2.7.4 | `MIMO桌宠-v2.7.4.apk` |
-| v2.7.3 | `MIMO桌宠-v2.7.3.apk` |
-| v2.7.2 | `MIMO桌宠-v2.7.2.apk` |
-| v2.7.1 | `MIMO桌宠-v2.7.1.apk` |
-| v2.7.0 | `MIMO桌宠-v2.7.0.apk` |
-| v2.6.0 | `MIMO桌宠-v2.6.0.apk` |
-| v2.5.9 | `MIMO桌宠-v2.5.9.apk` |
-| v2.5.8 | `MIMO桌宠-v2.5.8.apk` |
-| v2.5.7 | `MIMO桌宠-v2.5.7.apk` |
-| v2.5.6 | `MIMO桌宠-v2.5.6.apk` |
-| v2.5.5 | `MIMO桌宠-v2.5.5.apk` |
-| v2.5.4 | `MIMO桌宠-v2.5.4.apk` |
-| v2.5.3 | `MIMO桌宠-v2.5.3.apk` |
-| v2.5.2 | `MIMO桌宠-v2.5.2.apk` |
-| v2.5.1 | `MIMO桌宠-v2.5.1.apk` |
-| v2.5.0 | `MIMO桌宠-v2.5.0.apk` |
-| v2.4.1 | `MIMO桌宠-v2.4.1.apk` |
-| v2.4.0 | `MIMO桌宠-v2.4.0.apk` |
-| v2.3.10 | `MIMO桌宠-v2.3.10.apk` |
-| v2.3.9 | `MIMO桌宠-v2.3.9.apk` |
-| v2.3.8 | `MIMO桌宠-v2.3.8.apk` |
-| v2.3.7 | `MIMO桌宠-v2.3.7.apk` |
-| v2.3.6 | `MIMO桌宠-v2.3.6.apk` |
-| v2.3.5 | `MIMO桌宠-v2.3.5.apk` |
-| v2.3.4 | `MIMO桌宠-v2.3.4.apk` |
-| v2.3.3 | `MIMO桌宠-v2.3.3.apk` |
-| v2.3.2 | `MIMO桌宠-v2.3.2.apk` |
-| v2.3.1 | `MIMO桌宠-v2.3.1.apk` |
-| v2.3.0 | `MIMO桌宠-v2.3.0.apk` |
-| v2.2.0 | `MIMO桌宠-v2.2.0.apk` |
-| v2.1.3 | `MIMO桌宠-v2.1.3.apk` |
-| v2.1.2 | `MIMO桌宠-v2.1.2.apk` |
-| v2.1.1 | `MIMO桌宠-v2.1.1.apk` |
-| v2.1.0 | `MIMO桌宠-v2.1.0.apk` |
-| v2.0.2 | `MIMO桌宠-v2.0.2.apk` |
-| v2.0.1 | `MIMO桌宠-v2.0.1.apk` |
-| v2.0.0 | `MIMO桌宠-v2.0.0.apk` |
-| v1.2.2 | `MIMO桌宠-v1.2.2.apk` |
-| v1.2.1 | `MIMO桌宠-v1.2.1.apk` |
-| v1.2.0 | `MIMO桌宠-v1.2.0.apk` |
-| v1.1.0 | `MIMO桌宠-v1.1.0.apk` |
-| v1.0.0 | `MIMO兔娘桌宠-v1.0.0.apk` |
+| v1.0.0 | `mimo-pet-v1.0.0.apk` |
+| v1.1.0 | `mimo-pet-v1.1.0.apk` |
+| v1.2.0 | `mimo-pet-v1.2.0.apk` |
+| v1.2.1 | `mimo-pet-v1.2.1.apk` |
+| v2.0.1 | `mimo-pet-v2.0.1.apk` |
+| v2.0.2 | `mimo-pet-v2.0.2.apk` |
+| v2.1.0 | `mimo-pet-v2.1.0.apk` |
+| v2.1.3 | `mimo-pet-v2.1.3.apk` |
+| v2.3.0 | `mimo-pet-v2.3.0.apk` |
+| v2.3.2 | `mimo-pet-v2.3.2.apk` |
+| v2.5.0 | `mimo-pet-v2.5.0.apk` |
+| v2.8.7 | `mimo-pet-v2.8.7.apk` |
+| v3.0.0 | `mimo-pet-v3.0.0.apk` |
+| v3.0.3 | `mimo-pet-v3.0.3.apk` |
+| v3.0.7 | `mimo-pet-v3.0.7.apk` |
+| v3.1.2 | `mimo-pet-v3.1.2.apk` |
 
-每个版本对应一次 Release（Tag 与版本号一致），旧版 APK 作为附件一并上传；
 源码可在仓库主干查看，历史代码可通过对应 Tag 回溯。
