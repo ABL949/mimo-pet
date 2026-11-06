@@ -171,7 +171,7 @@ apksigner sign --ks your.keystore --out mimo-pet.apk aligned.apk
 
 ## 已发布里程碑
 
-以下里程碑版本已发布到 Releases，Tag 与版本号一致，APK 作为附件上传；中间调试与被否决的版本不公开发布，仅本地留存。
+仅以下里程碑版本公开发布；调试版与被否决版本未上传。
 
 | 版本 | 安装包文件名 |
 | --- | --- |
@@ -191,5 +191,3 @@ apksigner sign --ks your.keystore --out mimo-pet.apk aligned.apk
 | v3.0.3 | `mimo-pet-v3.0.3.apk` |
 | v3.0.7 | `mimo-pet-v3.0.7.apk` |
 | v3.1.2 | `mimo-pet-v3.1.2.apk` |
-
-源码可在仓库主干查看，历史代码可通过对应 Tag 回溯。
