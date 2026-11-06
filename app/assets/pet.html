@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>MIMO 桌宠</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-user-select: none; user-select: none; }
+  html, body { width: 100%; height: 100%; background: transparent; overflow: hidden; touch-action: none; }
+  body { position: relative; }
+
+  #stage {
+    position: absolute; left: 0; top: 0; right: 0; bottom: 0;
+  }
+  /* 内框：扣除顶部跳跃缓冲与两侧放大留白，角色图只在内框内 contain 贴底；
+     预留缓冲固定在窗与内框之间，不被 contain 的适配方向吃掉，跳起上移落在顶部缓冲内 */
+  #frame {
+    position: absolute;
+    top: var(--top, 52px);
+    bottom: 0;
+    left: var(--side, 12px);
+    right: var(--side, 12px);
+    display: flex; align-items: flex-end; justify-content: center;
+  }
+  /* 角色与气泡为平级独立层：img 挂内框，不包额外容器，避免嵌套层在真机
+     软件层 WebView 下打断图片高度链条、被帧间重排带动 */
+  #pet {
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: bottom center;
+    z-index: 1;
+    animation: floaty 3.4s ease-in-out infinite;
+    transform-origin: 50% 100%;
+    will-change: transform;
+    pointer-events: none;
+  }
+  #stage.walk #pet { animation: bob 0.84s ease-in-out infinite; }
+  #stage.shy #pet { animation: shy 1.2s ease; }
+  #stage.sleepy #pet { animation: droop 2.2s ease-in-out infinite; }
+
+  @keyframes floaty {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50% { transform: translateY(-16px) rotate(-1.5deg); }
+  }
+  @keyframes bob {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    25% { transform: translateY(-6px) rotate(-2deg); }
+    50% { transform: translateY(0) rotate(0deg); }
+    75% { transform: translateY(-6px) rotate(2deg); }
+  }
+  @keyframes shy {
+    0%, 100% { transform: rotate(0deg) translateX(0); }
+    25% { transform: rotate(-4deg) translateX(-6px); }
+    75% { transform: rotate(4deg) translateX(6px); }
+  }
+  @keyframes droop {
+    0%, 100% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(4px) scale(0.98); }
+  }
+
+  /* 气泡已移到安卓原生独立悬浮窗，网页内不再渲染气泡 DOM */
+
+  /* ===== 萌版 chibi：尺寸由原生三档控制，网页内统一 contain 贴底，上方留给跳跃余量 ===== */
+  #stage.pet-chibi.happy #pet { animation: jumpChibi 0.9s ease; }
+  @keyframes jumpChibi {
+    0% { transform: translateY(0) scale(1); }
+    30% { transform: translateY(-52px) scale(1.06) rotate(-3deg); }
+    55% { transform: translateY(0) scale(1); }
+    75% { transform: translateY(-22px) scale(1.03) rotate(2deg); }
+    100% { transform: translateY(0) scale(1); }
+  }
+
+  /* ===== 兔娘 bunny：基础宽高/contain 走 #pet；此处只分流 happy 跳跃幅度 ===== */
+  #stage.pet-bunny.happy #pet { animation: jumpBunny 0.9s ease; }
+  @keyframes jumpBunny {
+    0% { transform: translateY(0) scale(1) rotate(0deg); }
+    30% { transform: translateY(-38px) scale(1.02) rotate(-3deg); }
+    55% { transform: translateY(0) scale(1) rotate(0deg); }
+    78% { transform: translateY(-16px) scale(1.01) rotate(2deg); }
+    100% { transform: translateY(0) scale(1) rotate(0deg); }
+  }
+
+  #z {
+    position: absolute; top: 18%; left: 62%;
+    z-index: 9;
+    font-size: 26px; color: #fff;
+    text-shadow: 0 2px 6px rgba(0,0,0,0.35);
+    opacity: 0;
+    transition: all 0.5s ease;
+    pointer-events: none;
+  }
+  #z.show { opacity: 1; }
+</style>
+</head>
+<body>
+  <div id="stage">
+    <div id="frame"><img id="pet" src="pets/bunny.gif" alt="MIMO"></div>
+    <div id="z">zZ</div>
+  </div>
+
+<script>
+  var stage = document.getElementById('stage');
+  var pet = document.getElementById('pet');
+  var z = document.getElementById('z');
+
+  var config = { pet: 'bunny', quiet: false, walk: true, top: 52, side: 12 };
+
+  function loadConfig() {
+    var q = new URLSearchParams(location.search);
+    var petQ = q.get('pet');
+    if (petQ) config.pet = petQ;
+    try {
+      if (window.Android) {
+        var raw = window.Android.getConfig();
+        if (raw && raw !== '{}') {
+          var o = JSON.parse(raw);
+          if (o.pet) config.pet = o.pet;
+          config.quiet = !!o.quiet;
+          config.walk = !!o.walk;
+          if (o.top != null) config.top = o.top;
+          if (o.side != null) config.side = o.side;
+        }
+      }
+    } catch (e) {}
+    if (config.pet !== 'chibi') config.pet = 'bunny';
+    pet.src = 'pets/' + config.pet + '.gif';
+    // 预留缓冲写进 CSS 变量：内框顶部留跳跃缓冲、两侧留放大留白
+    stage.style.setProperty('--top', config.top + 'px');
+    stage.style.setProperty('--side', config.side + 'px');
+    // 形象隔离：舞台打形象类，CSS/尺寸按类分流，调兔娘不影响萌版
+    stage.classList.remove('pet-bunny', 'pet-chibi');
+    stage.classList.add(config.pet === 'chibi' ? 'pet-chibi' : 'pet-bunny');
+    if (config.walk) stage.classList.add('walk');
+  }
+
+  // 点击才出现的被戳台词
+  var tapHappyLines = ['戳我干嘛呀~', '要摸摸头吗？', '摸摸~', '别点啦~'];
+  var tapShyLines = ['害羞…', '别盯着看啦', '不好意思…'];
+  // 待机自动冒泡的中性台词（不含被戳语境）
+  var idleLines = ['今天想你哟', '在呢！', '陪你呀~', '发呆中…', '哼着小调~', '无聊啦…', '在忙什么呢？'];
+
+  // 兔娘：七成避开上一句、三成纯随机；萌版沿用 v2.7.0 纯随机
+  var lastLine = {};
+  function pick(lines, key) {
+    var avoid = Math.random() < 0.7;
+    var pool = avoid ? lines.filter(function (x) { return x !== lastLine[key]; }) : lines;
+    var arr = pool.length ? pool : lines;
+    var t = arr[Math.floor(Math.random() * arr.length)];
+    lastLine[key] = t;
+    return t;
+  }
+  function choose(lines, key) {
+    if (config.pet === 'chibi') return lines[Math.floor(Math.random() * lines.length)];
+    return pick(lines, key);
+  }
+
+  // 台词交给安卓原生独立悬浮窗显示，显隐与计时由原生控制，不经过本网页布局
+  function showBubble(text) {
+    if (config.quiet) return;
+    try {
+      if (window.Android && Android.showBubble) Android.showBubble(text);
+    } catch (e) {}
+  }
+
+  function clearMood() {
+    stage.classList.remove('happy', 'shy', 'sleepy');
+    z.classList.remove('show');
+  }
+
+  // 原生触摸判定为点击后回调此方法
+  window.petTap = function () {
+    clearMood();
+    var r = Math.random();
+    if (r < 0.6) {
+      stage.classList.add('happy');
+      showBubble(choose(tapHappyLines, 'happy'));
+      setTimeout(function () { stage.classList.remove('happy'); }, 1000);
+    } else if (r < 0.8) {
+      stage.classList.add('sleepy');
+      z.classList.add('show');
+      showBubble('困困的…');
+      setTimeout(function () { clearMood(); }, 2600);
+    } else {
+      stage.classList.add('shy');
+      showBubble(choose(tapShyLines, 'shy'));
+      setTimeout(function () { stage.classList.remove('shy'); }, 1200);
+    }
+  };
+
+  // 待机时定时随机冒一句中性台词，安静模式不冒
+  function autoChat() {
+    if (config.quiet) return;
+    showBubble(choose(idleLines, 'idle'));
+  }
+
+  // 待机/游走时按概率自己跳一下（不打断困倦状态），偶尔顺带冒一句台词
+  function autoJump() {
+    if (stage.classList.contains('sleepy')) return;
+    if (Math.random() > 0.35) return;
+    clearMood();
+    stage.classList.add('happy');
+    if (Math.random() < 0.5) showBubble(choose(idleLines, 'idle'));
+    setTimeout(function () { stage.classList.remove('happy'); }, 1000);
+  }
+
+  loadConfig();
+  setInterval(autoChat, 10000 + Math.random() * 5000);
+  setInterval(autoJump, 6000 + Math.random() * 4000);
+</script>
+</body>
+</html>
