@@ -6,6 +6,8 @@
 > ⚠️ 本项目为**非官方二创同人**，与小米公司及其品牌形象无关，仅供个人非商业使用，
 > 详见 [NOTICE.md](NOTICE.md)。
 
+仓库地址：[GitHub 主仓](https://github.com/ABL949/mimo-pet) · [Gitee 国内镜像](https://gitee.com/ABL949/mimo-pet)
+
 ## 功能一览
 
 - **双形象切换**：兔娘 / 萌版 两款立绘，在设置页点选即可切换
@@ -21,7 +23,7 @@
 
 ## 安装
 
-1. 在 Releases 页面下载最新版 `mimo-pet-v3.1.2.apk`
+1. 在仓库 Releases 页面下载最新版 `mimo-pet-v3.1.2.apk`（GitHub 与 Gitee 镜像均可）
 2. 允许系统「安装未知来源应用」后点击安装
 3. 打开 App → 首次使用开启**悬浮窗权限** → 点「启动桌宠」
 
