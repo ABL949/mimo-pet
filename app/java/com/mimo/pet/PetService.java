@@ -7,6 +7,7 @@ import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.GradientDrawable;
@@ -45,6 +46,8 @@ public class PetService extends Service {
     private SharedPreferences sp;
     private int screenW, screenH;
     private float density;
+    private int lastW, lastH; // 记录创建窗时的屏幕尺寸，用于检测横竖屏翻转
+    private int lastRotation = -1; // 当前屏幕旋转方向，横屏按握持方向分流贴边补偿
 
     // 游走状态（速度 px/秒，浮点位置按帧平滑推进）
     private Handler walkHandler;
@@ -57,10 +60,19 @@ public class PetService extends Service {
     // 触摸拖动状态
     private boolean dragging = false;
     private boolean snapped = false;
-    private int snapEdge = -1; // 0左 1右 2上 3下
+    private int snapEdge = -1; // 0左 1右 3下（顶边不吸附）
     private float downRawX, downRawY;
     private int downX, downY;
     private int touchSlop;
+
+    // 吸附露出比例：左边多露一点、右边露一半；贴底露出约四分之三身高（头与上身在屏内，仅裁脚底）
+    private static final float LEFT_SHOW = 0.60f;
+    private static final float RIGHT_SHOW = 0.50f;
+    // 横屏软件层 WebView 角色在窗内偏右，右贴边多收一些，露出量对齐竖屏基准；竖屏沿用 0.50
+    private static final float RIGHT_SHOW_LAND = 0.70f;
+    // rot1（正握横屏）窗内角色偏右更多，右贴边需再加大补偿；rot3（反握）沿用 0.70
+    private static final float RIGHT_SHOW_LAND_R1 = 0.85f;
+    private static final float BOTTOM_SHOW = 0.76f;
 
     // 吸附后定时游回
     private Handler snapHandler;
@@ -88,13 +100,33 @@ public class PetService extends Service {
         touchSlop = Math.round(10 * density);
     }
 
-    // 动态读取当前显示的真实宽高（随横竖屏切换更新），避免悬浮窗沿用创建时的竖屏尺寸
+    // 动态读取当前显示的真实宽高（随横竖屏切换更新）
     private void updateDisplaySize() {
         DisplayMetrics dm = new DisplayMetrics();
         wm.getDefaultDisplay().getRealMetrics(dm);
         screenW = dm.widthPixels;
         screenH = dm.heightPixels;
         density = dm.density;
+        try { lastRotation = wm.getDefaultDisplay().getRotation(); } catch (Exception ignored) {}
+    }
+
+    // 宽高比是否发生横竖屏翻转
+    private boolean orientationFlipped() {
+        if (lastW == 0) return false;
+        return (lastW > lastH) != (screenW > screenH);
+    }
+
+    // 右贴边露出比例：竖屏用验收基准；横屏按握持方向分流，正握(rot1)补偿更大，反握(rot3)沿用横屏基准
+    private float rightShow() {
+        if (screenW <= screenH) return RIGHT_SHOW;
+        return lastRotation == 1 ? RIGHT_SHOW_LAND_R1 : RIGHT_SHOW_LAND;
+    }
+
+
+    // 是否需要按新屏重建：仅宽高比发生横竖屏翻转（沿用 3.1.3 验收口径，尺寸微变不重建）
+    private boolean shouldRebuild() {
+        if (lastW == 0) return false;
+        return orientationFlipped();
     }
 
     @Override
@@ -114,6 +146,17 @@ public class PetService extends Service {
         return START_NOT_STICKY;
     }
 
+    // 独立监听横竖屏/尺寸变化：不依赖走动循环，翻转即按新屏重建，避免窗沿用旧宽高出屏或消失。
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        updateDisplaySize();
+        if (web == null) return;
+        if (lastW != 0 && ((lastW > lastH) != (screenW > screenH))) {
+            rebuild();
+        }
+    }
+
     // ---------- config ----------
     private String petType() { return sp.getString(K_PET, "bunny"); }
     private String sizeKey() { return sp.getString(K_SIZE, "standard"); }
@@ -121,7 +164,17 @@ public class PetService extends Service {
     private boolean passThrough() { return sp.getBoolean(K_PASS, false); }
     private boolean walk() { return sp.getBoolean(K_WALK, true); }
 
+    // 按屏幕短边（dp）给尺寸系数：以 360dp 宽主流屏为基准，小屏收、大屏放，夹 0.85~1.20；
+    // 横屏短边=屏高，角色自动偏小，不占满矮屏。密度换算由 density 另行处理。
+    private float screenScale() {
+        float wdp = screenW / density;
+        float hdp = screenH / density;
+        float shortDp = Math.min(wdp, hdp);
+        return Math.max(0.85f, Math.min(1.20f, shortDp / 360f));
+    }
+
     private int[] sizeDp() {
+        float s = screenScale();
         // 兔娘三档：标准取小/大中间值；大档横屏不占满整屏；小档再缩小
         int[] bunny;
         switch (sizeKey()) {
@@ -129,14 +182,16 @@ public class PetService extends Service {
             case "large":   bunny = new int[]{170, 228}; break;
             default:        bunny = new int[]{135, 182};
         }
+        int bw = Math.round(bunny[0] * s);
+        int bh = Math.round(bunny[1] * s);
         if (petType().equals("chibi")) {
             // 萌版按兔娘 ×0.8，同档明显比兔娘小一圈
             return new int[]{
-                Math.round(bunny[0] * 0.80f),
-                Math.round(bunny[1] * 0.80f)
+                Math.round(bw * 0.80f),
+                Math.round(bh * 0.80f)
             };
         }
-        return bunny;
+        return new int[]{bw, bh};
     }
 
     // ---------- overlay ----------
@@ -147,12 +202,12 @@ public class PetService extends Service {
         int roleH = Math.round(dp[1] * density);
         boolean isChibi = petType().equals("chibi");
         // 各形象跳起的上移幅度（与网页 jump 关键帧一致）；气泡基线按此上抬，跳起后停在帽檐上方、不压眼
-        float jumpUpDp = isChibi ? 52f : 38f;
+        float jumpUpDp = isChibi ? 38f : 26f;
         // 跳跃关键帧最大缩放（与网页一致）：余量要覆盖跳幅 + 缩放把头顶/左右顶出的部分 + 安全边，否则跳起被窗沿裁
         float scaleMax = isChibi ? 1.06f : 1.02f;
         float roleWdp = dp[0], roleHdp = dp[1];
         // 安全边放大：顶部覆盖跳幅+头顶放大外扩+缓冲；两侧覆盖左右放大外扩+缓冲
-        topReserveDp = jumpUpDp + roleHdp * (scaleMax - 1f) + 18f;
+        topReserveDp = jumpUpDp + roleHdp * (scaleMax - 1f) + 3f;
         sideReserveDp = roleWdp * (scaleMax - 1f) + 14f;
         jumpReservePx = Math.round(topReserveDp * density);
         sideReservePx = Math.round(sideReserveDp * density);
@@ -161,6 +216,9 @@ public class PetService extends Service {
         // 横屏可视高度较矮时，窗口高度不超过可视区，避免角色被上下裁掉
         h = Math.min(h, Math.round(screenH * 0.92f));
         int w = roleW + sideReservePx * 2;
+        // 宽度不超过屏宽减小边距，窄屏/小窗机型上不顶满整宽
+        int maxW = Math.max(roleW, screenW - Math.round(8 * density));
+        w = Math.min(w, maxW);
 
         web = new WebView(this);
         web.setBackgroundColor(0x00000000);
@@ -199,6 +257,8 @@ public class PetService extends Service {
         params.x = Math.max(0, Math.min((screenW - w) / 2, maxX));
         params.y = Math.max(0, Math.min(screenH - h - Math.round(60 * density), maxY));
         wm.addView(web, params);
+        lastW = screenW;
+        lastH = screenH;
         createBubble();
 
         initWalkDir();
@@ -323,11 +383,17 @@ public class PetService extends Service {
     private void moveWalking() {
         if (web == null || !web.isShown() || dragging) return;
         updateDisplaySize();
+        // 横竖屏翻转后按新屏尺寸重建窗口，避免沿用旧屏宽高导致边界/裁切错位
+        if (shouldRebuild()) {
+            rebuild();
+            return;
+        }
         maybeAutoSnap();
         if (snapped) return;
 
         int maxX = Math.max(0, screenW - params.width);
-        int minY = Math.round(24 * density);
+        // 顶部不留安全边，让角色能靠到屏幕最上部；头顶与屏顶之间仍隔着跳跃预留区，跳起不裁头
+        int minY = 0;
         int maxY = Math.max(minY, screenH - params.height - Math.round(16 * density));
 
         if (--frameCount <= 0) {
@@ -362,37 +428,34 @@ public class PetService extends Service {
 
     // ---------- snap to edge ----------
     private int clampX(int x) {
-        int min = Math.round(-params.width * 0.55f);
-        int max = screenW - Math.round(params.width * 0.45f);
+        int min = Math.round(-params.width * (1 - LEFT_SHOW));
+        int max = screenW - Math.round(params.width * rightShow());
         return Math.max(min, Math.min(x, max));
     }
 
     private int clampY(int y) {
-        int min = Math.round(-params.height * 0.55f);
-        int max = screenH - Math.round(params.height * 0.45f);
+        // 顶边不出屏；底边最多藏到露出约三分之二身高（头与上身在屏内）
+        int min = 0;
+        int max = screenH - Math.round(params.height * BOTTOM_SHOW);
         return Math.max(min, Math.min(y, max));
     }
 
-    // 拖动松手：只有被拖入边缘超过 30% 才吸附，否则完整停在边缘
+    // 拖动松手：就近贴边吸附（左/右/底，顶边不吸）。按到各边的距离判定，避免补偿后某边隐藏量落在阈值临界而吸不住
     private void maybeSnapDrag() {
         int w = params.width, h = params.height;
-        float deep = 0.30f;
-        int hiddenLeft = Math.max(0, -params.x);
-        int hiddenRight = Math.max(0, params.x + w - screenW);
-        int hiddenTop = Math.max(0, -params.y);
-        int hiddenBottom = Math.max(0, params.y + h - screenH);
+        int distLeft = Math.max(0, params.x);
+        int distRight = Math.max(0, screenW - (params.x + w));
+        int distBottom = Math.max(0, screenH - (params.y + h));
+        int threshold = Math.round(24 * density);
 
-        if (hiddenLeft > w * deep) {
-            params.x = -w / 2;
+        if (distLeft <= threshold && distLeft <= distRight && distLeft <= distBottom) {
+            params.x = Math.round(-w * (1 - LEFT_SHOW));
             snapped = true; snapEdge = 0;
-        } else if (hiddenRight > w * deep) {
-            params.x = screenW - w / 2;
+        } else if (distRight <= threshold && distRight <= distLeft && distRight <= distBottom) {
+            params.x = screenW - Math.round(w * rightShow());
             snapped = true; snapEdge = 1;
-        } else if (hiddenTop > h * deep) {
-            params.y = -h / 2;
-            snapped = true; snapEdge = 2;
-        } else if (hiddenBottom > h * deep) {
-            params.y = screenH - h / 2;
+        } else if (distBottom <= threshold && distBottom <= distLeft && distBottom <= distRight) {
+            params.y = screenH - Math.round(h * BOTTOM_SHOW);
             snapped = true; snapEdge = 3;
         } else {
             snapped = false;
@@ -405,7 +468,7 @@ public class PetService extends Service {
         }
     }
 
-    // 待机时小概率就近贴到正在靠近的那条边，之后会随机游回
+    // 待机时小概率就近贴到左/右/底边（顶边不吸附），之后会随机游回
     private void maybeAutoSnap() {
         if (snapped || dragging || !walk()) return;
         if (Math.random() > 0.004) return;
@@ -413,22 +476,19 @@ public class PetService extends Service {
         int w = params.width, h = params.height;
         int distLeft = Math.max(0, params.x);
         int distRight = Math.max(0, screenW - (params.x + w));
-        int distTop = Math.max(0, params.y);
         int distBottom = Math.max(0, screenH - (params.y + h));
 
         // 只有已经贴近某条边（阈值内）才就近吸附，不在屏幕中央跳向远处的边
         int threshold = Math.round(24 * density);
-        int minDist = Math.min(Math.min(distLeft, distRight), Math.min(distTop, distBottom));
+        int minDist = Math.min(Math.min(distLeft, distRight), distBottom);
         if (minDist > threshold) return;
 
-        if (distLeft <= distRight && distLeft <= distTop && distLeft <= distBottom) {
-            params.x = -w / 2; snapEdge = 0;
-        } else if (distRight <= distLeft && distRight <= distTop && distRight <= distBottom) {
-            params.x = screenW - w / 2; snapEdge = 1;
-        } else if (distTop <= distLeft && distTop <= distRight && distTop <= distBottom) {
-            params.y = -h / 2; snapEdge = 2;
+        if (distLeft <= distRight && distLeft <= distBottom) {
+            params.x = Math.round(-w * (1 - LEFT_SHOW)); snapEdge = 0;
+        } else if (distRight <= distLeft && distRight <= distBottom) {
+            params.x = screenW - Math.round(w * rightShow()); snapEdge = 1;
         } else {
-            params.y = screenH - h / 2; snapEdge = 3;
+            params.y = screenH - Math.round(h * BOTTOM_SHOW); snapEdge = 3;
         }
         snapped = true;
         posX = params.x;
@@ -456,7 +516,6 @@ public class PetService extends Service {
         switch (snapEdge) {
             case 0: vx = Math.abs(speedX); vy = (Math.random() < 0.5 ? -1 : 1) * speedY; break; // 左 → 向右
             case 1: vx = -Math.abs(speedX); vy = (Math.random() < 0.5 ? -1 : 1) * speedY; break; // 右 → 向左
-            case 2: vy = Math.abs(speedY); vx = (Math.random() < 0.5 ? -1 : 1) * speedX; break; // 上 → 向下
             case 3: vy = -Math.abs(speedY); vx = (Math.random() < 0.5 ? -1 : 1) * speedX; break; // 下 → 向上
             default:
                 vx = (Math.random() < 0.5 ? -1 : 1) * speedX;
@@ -552,9 +611,14 @@ public class PetService extends Service {
         startForeground(NOTIF_ID, b.build());
     }
 
-    @Override
-    public void onDestroy() {
+    // 移除角色窗与气泡窗、停掉游走/吸附/气泡计时，供横竖屏重建与销毁复用
+    private void releaseOverlay() {
         stopWalkLoop();
+        // 重建后旧吸附状态不再适用，清掉避免新窗沿用旧贴边方向/速度
+        snapped = false;
+        snapEdge = -1;
+        vx = 0;
+        vy = 0;
         if (snapHandler != null && snapBack != null) snapHandler.removeCallbacks(snapBack);
         if (bubbleHandler != null && bubbleHide != null) bubbleHandler.removeCallbacks(bubbleHide);
         if (bubble != null) {
@@ -566,6 +630,24 @@ public class PetService extends Service {
             web.destroy();
             web = null;
         }
+    }
+
+    // 横竖屏翻转后按当前屏幕尺寸重建窗口
+    private void rebuild() {
+        try {
+            releaseOverlay();
+            createOverlay();
+        } catch (Exception e) {
+            // 重建异常时兜底：尽量保留可运行状态，避免桌宠直接消失
+            if (web == null) {
+                try { createOverlay(); } catch (Exception ignored) {}
+            }
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        releaseOverlay();
         super.onDestroy();
     }
 

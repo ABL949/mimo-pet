@@ -1,6 +1,8 @@
 package com.mimo.pet;
 
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Bitmap;
@@ -10,21 +12,37 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
 
+import org.json.JSONObject;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.io.InputStream;
 
 public class MainActivity extends Activity {
 
     private static final int REQ_OVERLAY = 1001;
+    private static final String K_IGNORE_VER = "ignore_version";
+
+    private static final String GITEE_LATEST = "https://gitee.com/api/v5/repos/ABL949/mimo-pet/releases/latest";
+    private static final String GITHUB_LATEST = "https://api.github.com/repos/ABL949/mimo-pet/releases/latest";
+    private static final String GITEE_RELEASES = "https://gitee.com/ABL949/mimo-pet/releases";
+    private static final String GITHUB_RELEASES = "https://github.com/ABL949/mimo-pet/releases";
+
     private SharedPreferences sp;
 
     private View cardBunny, cardChibi;
@@ -155,6 +173,171 @@ public class MainActivity extends Activity {
                 stopService(new Intent(MainActivity.this, PetService.class));
             }
         });
+
+        checkUpdate();
+    }
+
+    // ---------- update check ----------
+    private String currentVersion() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "0.0.0";
+        }
+    }
+
+    private void checkUpdate() {
+        final String current = currentVersion();
+        final Handler main = new Handler(Looper.getMainLooper());
+        new Thread(new Runnable() {
+            @Override public void run() {
+                String[] latest = fetchLatest(GITEE_LATEST);
+                if (latest == null) latest = fetchLatest(GITHUB_LATEST);
+                if (latest == null) return;
+                final String tag = latest[0];
+                final String body = latest.length > 1 ? latest[1] : "";
+                if (tag == null || compareVersion(tag, current) <= 0) return;
+                if (tag.equals(sp.getString(K_IGNORE_VER, ""))) return;
+                main.post(new Runnable() {
+                    @Override public void run() { showUpdateDialog(tag, body); }
+                });
+            }
+        }).start();
+    }
+
+    // 返回 [tag_name, body]；失败返回 null
+    private String[] fetchLatest(String urlStr) {
+        HttpURLConnection c = null;
+        try {
+            URL url = new URL(urlStr);
+            c = (HttpURLConnection) url.openConnection();
+            c.setConnectTimeout(3000);
+            c.setReadTimeout(3000);
+            c.setRequestMethod("GET");
+            c.setRequestProperty("Accept", "application/json");
+            if (c.getResponseCode() != 200) return null;
+            BufferedReader br = new BufferedReader(new InputStreamReader(c.getInputStream(), "UTF-8"));
+            StringBuilder sb = new StringBuilder();
+            String line;
+            while ((line = br.readLine()) != null) sb.append(line);
+            br.close();
+            JSONObject o = new JSONObject(sb.toString());
+            String tag = o.optString("tag_name", "");
+            String body = o.optString("body", "");
+            if (tag.length() == 0) return null;
+            return new String[]{tag, body};
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (c != null) c.disconnect();
+        }
+    }
+
+    // 清理 Release 正文：弹窗只展示更新说明，去掉 Markdown 引用块与免责/版权条款段
+    private String cleanReleaseBody(String raw) {
+        if (raw == null) return "";
+        String[] lines = raw.split("\\r?\\n");
+        StringBuilder sb = new StringBuilder();
+        for (String ln : lines) {
+            String t = ln.trim();
+            if (t.length() == 0) continue;
+            if (t.startsWith(">")) continue;            // Markdown 引用块（免责声明通常写成引用）
+            if (isDisclaimer(t)) continue;            // 命中免责/版权关键词的整行
+            sb.append(t).append("\n");
+        }
+        return sb.toString().trim();
+    }
+
+    private boolean isDisclaimer(String t) {
+        String[] keys = {"非官方", "二创同人", "商业使用", "不得用于商业", "版权归原作者",
+                "侵权", "联系下架", "与小米", "品牌形象", "个人学习", "素材来源于网络"};
+        for (String k : keys) if (t.contains(k)) return true;
+        return false;
+    }
+
+    // 语义化版本比较：a>b 返回正，a<b 返回负，相等 0；忽略前导 v
+    private int compareVersion(String a, String b) {
+        int[] pa = parseVer(a);
+        int[] pb = parseVer(b);
+        int n = Math.max(pa.length, pb.length);
+        for (int i = 0; i < n; i++) {
+            int x = i < pa.length ? pa[i] : 0;
+            int y = i < pb.length ? pb[i] : 0;
+            if (x != y) return x > y ? 1 : -1;
+        }
+        return 0;
+    }
+
+    private int[] parseVer(String v) {
+        String s = v.trim().replaceFirst("^[vV]", "");
+        String[] parts = s.split("[^0-9]+");
+        int[] out = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            try { out[i] = parts[i].length() > 0 ? Integer.parseInt(parts[i]) : 0; }
+            catch (NumberFormatException e) { out[i] = 0; }
+        }
+        return out;
+    }
+
+    private void showUpdateDialog(final String tag, String body) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(20);
+        box.setPadding(pad, dp(16), pad, 0);
+
+        TextView msg = new TextView(this);
+        String text = "检测到新版本 " + tag + "，可前往下载页查看更新内容。";
+        String cleaned = cleanReleaseBody(body);
+        if (cleaned.length() > 0) {
+            if (cleaned.length() > 200) cleaned = cleaned.substring(0, 200) + "…";
+            text = text + "\n\n" + cleaned;
+        }
+        msg.setText(text);
+        msg.setTextColor(Color.rgb(60, 64, 84));
+        msg.setTextSize(14);
+        msg.setLineSpacing(dp(4), 1f);
+        box.addView(msg);
+
+        final CheckBox cb = new CheckBox(this);
+        cb.setText("本版本更新不再提醒");
+        cb.setTextColor(Color.rgb(90, 94, 110));
+        cb.setTextSize(13);
+        cb.setPadding(0, dp(12), 0, 0);
+        box.addView(cb);
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("发现新版本 " + tag)
+                .setView(box)
+                .setPositiveButton("Gitee 下载", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        rememberIgnore(tag, cb.isChecked());
+                        openLink(GITEE_RELEASES);
+                    }
+                })
+                .setNegativeButton("GitHub 下载", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        rememberIgnore(tag, cb.isChecked());
+                        openLink(GITHUB_RELEASES);
+                    }
+                })
+                .setNeutralButton("稍后", new DialogInterface.OnClickListener() {
+                    @Override public void onClick(DialogInterface d, int w) {
+                        rememberIgnore(tag, cb.isChecked());
+                    }
+                })
+                .create();
+        dialog.show();
+    }
+
+    private void rememberIgnore(String tag, boolean ignore) {
+        if (ignore) sp.edit().putString(K_IGNORE_VER, tag).apply();
+        else if (tag.equals(sp.getString(K_IGNORE_VER, ""))) sp.edit().remove(K_IGNORE_VER).apply();
+    }
+
+    private void openLink(String url) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception ignored) {}
     }
 
     // ---------- UI helpers ----------
